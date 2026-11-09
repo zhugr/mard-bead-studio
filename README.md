@@ -1,3 +1,5 @@
+> **v2.2.1 hotfix (2026-11-09):** Fixed an extra closing brace in the finish simulator code that prevented the entire JavaScript module from loading. All controls were consequently inactive. No local artwork or storage migration is required.
+
 # MARD Bead Studio v2.2 · GitHub Pages Edition
 
 免费、无需账号、无需服务器的拼豆设计与完成品模拟工具。中文、English、Bahasa Melayu。
