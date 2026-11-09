@@ -23,3 +23,27 @@
 .coffee{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#fff0c8;color:#75491d;border:1px solid #efd99d;border-radius:20px;padding:10px 16px;text-decoration:none;font-size:13px;font-weight:700}.coffee:hover{background:#ffe6a2}.freeNote{display:block;margin:8px 0 12px}
 body.darkV22{background:#17161b;color:#efe7ed}body.darkV22 .panel,body.darkV22 .top,body.darkV22 .previewDialog,body.darkV22 .projectDialog,body.darkV22 .finishDialog{background:#29252d;color:#f3e8f0;border-color:#52414d}body.darkV22 .intro{background:#332b36;border-color:#604352}body.darkV22 button:not(.primary),body.darkV22 select,body.darkV22 input{background:#38303a;color:#f0e6ee;border-color:#665363}body.darkV22 .canvasArea{background-color:#2e2630}body.darkV22 .hint,body.darkV22 .intro p,body.darkV22 .field label{color:#cdbcc6}body.darkV22 .finishViews>div{background:#40343f}body.darkV22 .measure{background:#423141;color:#efbbd4}
 @media(max-width:760px){.finishControls{grid-template-columns:1fr}.finishViews{gap:6px}.finishViews>div{padding:5px}.finishDialog{padding:10px}.v22actions{gap:5px}.v22actions button{flex:1;min-width:37px}.candidate canvas{max-height:68px}.introButtons{flex-wrap:wrap}.introButtons #finishStandalone{flex:1 1 100%}.editor{overflow:visible}.toolbar{position:sticky;top:0;z-index:5;padding:5px;background:#fffafbea;border-radius:10px}body.darkV22 .toolbar{background:#29252de9}}
+
+/* v2.2.2: never let dark-mode generic button styles hide true palette colours. */
+body.darkV22 #paletteGrid button.swatch,
+body.darkV22 .paletteGrid button.swatch {
+  background-color: var(--swatch) !important;
+  color: #1d1c20 !important;
+  border-color: rgba(0,0,0,.22) !important;
+  text-shadow: 0 1px 2px rgba(255,255,255,.95) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.2);
+}
+body.darkV22 #paletteGrid button.swatch.active {
+  outline: 3px solid #ff9ac4;
+  outline-offset: -3px;
+}
+/* Scrolling/panning a zoomed canvas is separate from painting. */
+#panCanvas.active { background:#efd5e3; border-color:#cf6d99; color:#782b55; font-weight:750; }
+body.darkV22 #panCanvas.active { background:#844461 !important; border-color:#efa4c7 !important; color:#fff !important; }
+#beadCanvas.panMode { cursor:grab; touch-action:none; }
+#beadCanvas.panMode:active { cursor:grabbing; }
+#canvasArea.panMode { overscroll-behavior:contain; }
+@media(max-width:760px) {
+ #panCanvas { min-width:118px; min-height:42px; }
+ #canvasArea { overflow:auto; -webkit-overflow-scrolling:touch; }
+}

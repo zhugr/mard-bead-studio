@@ -38,3 +38,11 @@
 - 当前执行环境限制了自动浏览器访问本地页面，故无法声明已通过端到端手动点击/移动端兼容验收。建议部署后重点检查：上传与三候选、编辑切换、旧 JSON 载入、完成品模拟、导出与本机保存。
 
 © LibraeSoft. Free to use. Voluntary support: https://buymeacoffee.com/libraesoft
+
+## v2.2.2 修复 / Mobile canvas & dark-mode fixes
+
+- 深色模式：MARD 色盘的颜色不再被深色主题按钮背景覆盖，色号清晰可辨。
+- 手机缩放：在编辑区的缩放按钮旁点击 **✋ 移动画布**，拖动查看放大画布的其他区域。完成后点击 **✎ 返回绘图**。
+- 保留已有绘图工具、工程与 GitHub Pages 静态部署结构。
+- 本补丁基于 v2.2.1 HOTFIX；更新前请备份 JSON 工程。
+- 已验证 JavaScript 语法、DOM ID 引用、ZIP 结构。真实手机浏览器点击测试仍需部署后验收。
