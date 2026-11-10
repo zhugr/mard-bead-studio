@@ -47,3 +47,49 @@ body.darkV22 #panCanvas.active { background:#844461 !important; border-color:#ef
  #panCanvas { min-width:118px; min-height:42px; }
  #canvasArea { overflow:auto; -webkit-overflow-scrolling:touch; }
 }
+
+/* v2.2.3: active states must remain obvious over the dark-mode generic button rule. */
+body.darkV22 .toolbar button.active,
+body.darkV22 .v22actions button.active,
+body.darkV22 button[aria-pressed="true"],
+body.darkV22 .candidate.chosen {
+  background:#82445f !important;
+  color:#fff4f9 !important;
+  border:2px solid #ffaed2 !important;
+  outline:1px solid #fff0fa !important;
+  outline-offset:1px;
+  font-weight:750;
+  box-shadow:0 0 0 2px rgba(255,174,210,.2),inset 0 0 0 1px rgba(255,255,255,.12);
+}
+body.darkV22 .toolbar button.active::after {content:' ✓';font-weight:900;color:#ffe4f1}
+body.darkV22 .candidate.chosen .candidateLabel {color:#fff4f9;font-weight:800}
+body.darkV22 .v22actions button.active:focus-visible,body.darkV22 .toolbar button.active:focus-visible {outline:3px solid #fff2b7}
+body.darkV22 .zoom button:active,body.darkV22 .preset button.active {border-color:#ffb5d3;color:#fff;background:#82445f}
+/* Fixed row & column rulers, linked to the scrollable canvas viewport. */
+.coordinateControls {display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:8px 0;font-size:12px}
+.coordinateControls>label {display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.coordinateControls input[type="checkbox"] {accent-color:#c45185}
+.goToControls {display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap}
+.goToControls input {width:57px;min-height:34px;padding:5px 6px;border:1px solid #ded0d8;border-radius:7px;text-align:center}
+.goToControls button {padding:6px 10px;min-height:34px}
+.coordReadout {font-size:12px;font-variant-numeric:tabular-nums;font-weight:700;color:#a33968;background:#fae9f0;padding:7px 10px;border-radius:9px;white-space:nowrap}
+.rulerShell {display:grid;grid-template-columns:27px minmax(0,1fr);grid-template-rows:27px minmax(0,auto);min-width:0;align-items:stretch}
+.rulerCorner {grid-column:1;grid-row:1;background:#f7e9dd;border:1px solid #d7c6c4;border-radius:7px 0 0 0}
+.rulerTop {grid-column:2;grid-row:1;display:block;width:100%;height:27px;background:#f7e9dd;border:1px solid #d7c6c4;border-left:0;border-radius:0 7px 0 0}
+.rulerLeft {grid-column:1;grid-row:2;display:block;width:27px;height:100%;background:#f7e9dd;border:1px solid #d7c6c4;border-top:0;border-radius:0 0 0 7px}
+.rulerShell .canvasArea {grid-column:2;grid-row:2;border-radius:0 0 8px 0;min-width:0;max-width:100%;overflow:auto !important}
+#crosshairOverlay {position:absolute;inset:0;z-index:4;pointer-events:none;display:block}
+body.darkV22 .coordReadout {color:#ffe6f4;background:#5a344d}
+body.darkV22 .rulerCorner,body.darkV22 .rulerTop,body.darkV22 .rulerLeft {background:#3f3442;border-color:#745766}
+body.darkV22 .coordinateControls label {color:#f2e7ed}
+.rulerShell.rulersHidden {grid-template-columns:0 minmax(0,1fr);grid-template-rows:0 minmax(0,auto)}
+.rulerShell.rulersHidden .rulerCorner,.rulerShell.rulersHidden .rulerTop,.rulerShell.rulersHidden .rulerLeft {visibility:hidden}
+@media(max-width:760px){
+ .coordinateControls{gap:7px}.coordReadout{order:10;width:100%;text-align:center}.goToControls{flex:1;justify-content:flex-end}
+ .goToControls input{width:52px}.rulerShell .canvasArea{min-height:240px;max-height:58vh}
+}
+
+body.darkV22 .toolbar button.active,body.darkV22 button#mirrorTool.active {text-decoration:none}
+body.darkV22 .candidate.chosen {position:relative}
+body.darkV22 .candidate.chosen::after {content:'✓';position:absolute;right:5px;top:2px;background:#f5b0cf;color:#36212e;border-radius:100%;width:17px;height:17px;font-size:12px;line-height:17px}
+body.darkV22 .preset button:focus-visible,body.darkV22 #themeToggle:focus-visible {outline:3px solid #ffb5d3}

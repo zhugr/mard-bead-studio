@@ -1,3 +1,25 @@
+# MARD Bead Studio v2.2.3 — UI / Coordinate Fix
+
+This update is based on v2.2.2, intended for static GitHub Pages hosting.
+
+## What changed
+- High-contrast selected buttons in dark mode for drawing tools, mirror/pan controls, and candidate images.
+- Rulers above and to the left of the canvas remain visible while panning/scrolling the canvas.
+- Desktop hover highlights the selected row and column, with a coordinate readout.
+- Touching a cell keeps its position highlighted on mobile; use the existing Hand/Pan tool to move the canvas.
+- Toggle rulers, row/column highlighting, and 10-cell guide lines.
+- Jump to a row and column (1-based coordinates), automatically scrolling it into view.
+- Chinese, English, Bahasa Melayu labels for coordinate controls.
+
+## Install
+Unzip and upload all root files and the `.github` workflow directory to `zhugr/mard-bead-studio` repository, replacing existing files. Commit to `main` and let Pages deploy.
+
+## Privacy and safety
+The app stays browser-local, with no backend or login. Back up your saved projects as JSON before updating, and **do not clear browser site data**. Existing project data is not migrated or deleted by this patch.
+
+## Testing
+JavaScript syntax and file packaging have been checked. Browser automation was blocked from accessing both localhost and file URLs in this environment, so live browser and mobile behavior needs a deployment smoke test.
+
 > **v2.2.1 hotfix (2026-11-09):** Fixed an extra closing brace in the finish simulator code that prevented the entire JavaScript module from loading. All controls were consequently inactive. No local artwork or storage migration is required.
 
 # MARD Bead Studio v2.2 · GitHub Pages Edition
