@@ -29,8 +29,128 @@ for(const ev of ['pointerup','pointercancel','lostpointercapture'])canvas.addEve
 function resize(nw,nh,keep=true){variants=null;buildProgress.clear();nw=Math.max(1,Math.min(200,Math.floor(nw)));nh=Math.max(1,Math.min(200,Math.floor(nh)));if(nw===w&&nh===h)return;checkpoint();const next=Array(nw*nh).fill(null);if(keep)for(let y=0;y<Math.min(h,nh);y++)for(let x=0;x<Math.min(w,nw);x++)next[y*nw+x]=cells[y*w+x];w=nw;h=nh;cells=next;$('widthInput').value=w;$('heightInput').value=h;refresh()}
 function rgbToLab([r,g,b]){const convert=v=>{v/=255;return v>.04045?((v+.055)/1.055)**2.4:v/12.92};[r,g,b]=[r,g,b].map(convert);let x=(.4124564*r+.3575761*g+.1804375*b)/.95047,y=.2126729*r+.7151522*g+.072175*b,z=(.0193339*r+.119192*g+.9503041*b)/1.08883;const f=t=>t>.008856?t**(1/3):7.787037*t+16/116;let fx=f(x),fy=f(y),fz=f(z);return [116*fy-16,500*(fx-fy),200*(fy-fz)]}
 let labs=new Map(palette.map(c=>[c.code,rgbToLab(c.rgb)]));function distance(a,b){return (a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2}
-async function generate(image){let source=image;lastImage=image;checkpoint();const off=document.createElement('canvas');off.width=w;off.height=h;const c=off.getContext('2d',{willReadFrequently:true});c.clearRect(0,0,w,h);let iw=image.naturalWidth||image.width,ih=image.naturalHeight||image.height;let dw=w,dh=h,dx=0,dy=0;const mode=$('imageMode').value;if(mode==='contain'){let scale=Math.min(w/iw,h/ih);dw=iw*scale;dh=ih*scale;dx=(w-dw)/2;dy=(h-dh)/2}else if(mode==='cover'){let scale=Math.max(w/iw,h/ih);dw=iw*scale;dh=ih*scale;dx=(w-dw)/2;dy=(h-dh)/2}c.drawImage(source,dx,dy,dw,dh);const data=c.getImageData(0,0,w,h).data;const allowed=palette.filter(x=>enabled.has(x.code));if(!allowed.length){toast(t('noColor'));return}const pixels=[],sample=new Map();for(let i=0;i<w*h;i++){let v=[...data.slice(i*4,i*4+4)];if((mode==='contain'&&v[3]<100)||(mode==='contain'&&$('removeBg').checked&&Math.min(v[0],v[1],v[2])>239)){pixels.push(null);continue}if(v[3]<100)v=[255,255,255,255];const lab=rgbToLab(v);pixels.push(lab);const key=v.slice(0,3).map(x=>Math.round(x/16)).join('-');if(!sample.has(key))sample.set(key,{lab,count:0});sample.get(key).count++}
- const scored=allowed.map(c=>({code:c.code,lab:labs.get(c.code),score:0}));for(const s of sample.values()){let best=scored[0],d=Infinity;for(const c of scored){const curr=distance(s.lab,c.lab);if(curr<d){d=curr;best=c}}best.score+=s.count}scored.sort((a,b)=>b.score-a.score);const chosen=scored.slice(0,Math.min(($('smartMode')?.value==='simple'?Math.max(3,Math.floor(+$('maxColors').value*.7)):+$('maxColors').value),scored.length));cells=pixels.map(lab=>{if(!lab)return null;let best=chosen[0],d=Infinity;for(const c of chosen){const curr=distance(lab,c.lab);if(curr<d){best=c;d=curr}}return best.code});variants=makeCandidates(cells);selectedVariant=0;buildProgress.clear();refresh();renderCandidates();toast(currentLang==='zh'?'生成完成，可以直接点格子修改颜色':currentLang==='en'?'Pattern ready. Tap cells to edit colors.':'Corak siap. Ketik petak untuk ubah warna.')}
+// v2.2.4: sample the original image at 4x bead resolution. Each candidate is
+// independently processed, rather than smoothing the same quantized matrix.
+function imageSamples(image){
+ const off=document.createElement('canvas'),factor=4;
+ off.width=w*factor;off.height=h*factor;
+ const c=off.getContext('2d',{willReadFrequently:true});
+ if(!c)throw new Error('Canvas 2D unavailable');
+ c.clearRect(0,0,off.width,off.height);
+ const iw=image.naturalWidth||image.width,ih=image.naturalHeight||image.height;
+ if(!iw||!ih)throw new Error('Invalid image dimensions');
+ let dw=off.width,dh=off.height,dx=0,dy=0;
+ const mode=$('imageMode').value;
+ if(mode==='contain'||mode==='cover'){
+  const scale=(mode==='contain'?Math.min:Math.max)(off.width/iw,off.height/ih);
+  dw=iw*scale;dh=ih*scale;dx=(off.width-dw)/2;dy=(off.height-dh)/2;
+ }
+ c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';
+ c.drawImage(image,dx,dy,dw,dh);
+ const rgba=c.getImageData(0,0,off.width,off.height).data;
+ const removeWhite=$('removeBg').checked && mode==='contain';
+ function validAt(offset){const a=rgba[offset+3];return a>=96&&!(removeWhite&&rgba[offset]>239&&rgba[offset+1]>239&&rgba[offset+2]>239)}
+ const sampled=[];
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  const samples=[];let r=0,g=0,b=0,visible=0,center=null;
+  for(let sy=0;sy<factor;sy++)for(let sx=0;sx<factor;sx++){
+   const k=((y*factor+sy)*off.width+x*factor+sx)*4;
+   if(!validAt(k))continue;
+   const rgb=[rgba[k],rgba[k+1],rgba[k+2]];
+   samples.push(rgb);r+=rgb[0];g+=rgb[1];b+=rgb[2];visible++;
+   if(sx>=1&&sx<=2&&sy>=1&&sy<=2)center=rgb;
+  }
+  sampled.push({samples,coverage:visible/16,average:visible?[r/visible,g/visible,b/visible]:null,center:center||null});
+ }
+ return sampled;
+}
+function candidateSource(data,kind,style){
+ const output=[];
+ const threshold=kind==='shape'?.25:kind==='detail'?.32:.52;
+ for(let i=0;i<data.length;i++){
+  const p=data[i];if(p.coverage<threshold||!p.average){output.push(null);continue;}
+  let color=p.average;
+  if(kind==='detail')color=p.center||p.average;
+  if(kind==='shape'){
+   // A dominant RGB cluster protects flat colors at a silhouette boundary.
+   const clusters=new Map();
+   for(const rgb of p.samples){const key=rgb.map(v=>Math.floor(v/40)).join(',');let a=clusters.get(key);
+    if(!a){a={count:0,sum:[0,0,0]};clusters.set(key,a)}
+    a.count++;for(let j=0;j<3;j++)a.sum[j]+=rgb[j];
+   }
+   let best=null;for(const c of clusters.values())if(!best||c.count>best.count)best=c;
+   if(best&&best.count>=Math.max(3,p.samples.length*.4))color=best.sum.map(v=>v/best.count);
+  }
+  if(style==='faithful'&&kind!=='detail')color=p.average;
+  output.push(rgbToLab(color));
+ }
+ return output;
+}
+function paletteCandidates(labsIn,allowed,maxCount){
+ const samples=new Map();for(const lab of labsIn){if(!lab)continue;
+  const key=lab.map(v=>Math.round(v/12)).join('/');let s=samples.get(key);
+  if(!s){s={sum:[0,0,0],count:0};samples.set(key,s)}
+  s.count++;for(let i=0;i<3;i++)s.sum[i]+=lab[i];
+ }
+ const scored=allowed.map(c=>({code:c.code,lab:labs.get(c.code),score:0}));
+ for(const s of samples.values()){
+  const lab=s.sum.map(v=>v/s.count);let best=null,min=Infinity;
+  for(const color of scored){const d=distance(lab,color.lab);if(d<min){min=d;best=color}}
+  if(best)best.score+=s.count;
+ }
+ scored.sort((a,b)=>b.score-a.score||a.code.localeCompare(b.code));
+ return scored.slice(0,Math.max(1,Math.min(maxCount,scored.length)));
+}
+function toBeadColors(pixelLabs,paletteOptions){
+ return pixelLabs.map(lab=>{if(!lab)return null;let nearest=null,dmin=Infinity;
+  for(const item of paletteOptions){const d=distance(lab,item.lab);if(d<dmin){dmin=d;nearest=item.code}}
+  return nearest;
+ });
+}
+function cleanBeadRegions(input,passes){
+ let current=input;
+ for(let pass=0;pass<passes;pass++){
+  const next=[...current];
+  for(let i=0;i<current.length;i++){
+   const c=current[i];if(c===null)continue;
+   const x=i%w,y=Math.floor(i/w),neighbors=[];
+   for(const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]){
+    const nx=x+dx,ny=y+dy;if(nx>=0&&nx<w&&ny>=0&&ny<h)neighbors.push(current[ny*w+nx]);
+   }
+   const freq=new Map();for(const v of neighbors)if(v!==null)freq.set(v,(freq.get(v)||0)+1);
+   let winner=null,majority=0;for(const [code,n] of freq)if(n>majority){winner=code;majority=n}
+   if(winner&&winner!==c&&majority>=3)next[i]=winner;
+  }
+  current=next;
+ }
+ return current;
+}
+function buildCandidateSet(image){
+ const allowed=palette.filter(x=>enabled.has(x.code));
+ if(!allowed.length)throw new Error(t('noColor'));
+ const style=$('smartMode').value,raw=imageSamples(image);
+ const max=Math.max(2,Math.min(50,Number($('maxColors').value)||12));
+ const definitions=[
+  {kind:'shape',cap:style==='simple'?.72:style==='faithful'?1:.9,passes:style==='simple'?1:0},
+  {kind:'detail',cap:style==='simple'?.86:1,passes:0},
+  {kind:'simple',cap:style==='simple'?.40:style==='faithful'?.8:.55,passes:style==='simple'?2:1}
+ ];
+ return definitions.map(def=>{
+  const samples=candidateSource(raw,def.kind,style);
+  const selected=paletteCandidates(samples,allowed,Math.max(2,Math.round(max*def.cap)));
+  const mapped=toBeadColors(samples,selected);
+  return cleanBeadRegions(mapped,def.passes);
+ });
+}
+async function generate(image){
+ lastImage=image;
+ try{
+  const next=buildCandidateSet(image);
+  checkpoint();variants=next.map(v=>[...v]);selectedVariant=0;
+  cells=[...variants[0]];buildProgress.clear();refresh();renderCandidates();
+  toast(currentLang==='zh'?'已独立生成轮廓、细节、简洁三种方案':currentLang==='en'?'Generated shape, detail and simple variants independently':'Pilihan bentuk, perincian dan ringkas telah dijana');
+ }catch(error){console.error('MARD conversion failed:',error);toast(currentLang==='zh'?'图片转换失败：'+error.message:'Image conversion failed: '+error.message)}
+}
 $('imageInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;const url=URL.createObjectURL(file);const img=new Image();img.onload=async()=>{currentProjectId=null;await generate(img);URL.revokeObjectURL(url)};img.onerror=()=>{toast('图片无法读取');URL.revokeObjectURL(url)};img.src=url;$('regenerateBtn').disabled=false;e.target.value=''};
 $('newBtn').onclick=()=>{if(count().length&&!confirm(t('confirmOpen')))return;checkpoint();currentProjectId=null;cells=Array(w*h).fill(null);variants=null;renderCandidates();lastImage=null;$('regenerateBtn').disabled=true;refresh()};
 $('regenerateBtn').onclick=()=>lastImage&&generate(lastImage);
@@ -218,19 +338,36 @@ loadCustomPalettes();try{const stored=JSON.parse(localStorage.getItem('mard-stud
 renderPalette();refresh();initTranslations();setTimeout(()=>$('zoomFit').click(),100);
 // v2.2 enhancements: all browser-local, no API keys or server calls.
 const V22={
-zh:{smartHead:'✨ 智能转换与候选图',smartMode:'转换风格',smartNote:'离线优化算法，非云端 AI；小图可能仍需手工修正。',rebuild:'重新生成三种方案',aiHead:'外部 AI Prompt 助手',aiHelp:'复制提示词和原图到自己的 AI 服务，优化后再上传。',copyPrompt:'复制优化 Prompt',finish:'完成品模拟',snapshot:'保存历史快照',restore:'恢复快照',theme:'深色模式',mirror:'镜像画笔',rotate:'旋转90°',flip:'水平翻转',replace:'全图替换色号',apply:'替换',compare:'叠加原图对比（本次上传）',quality:'图纸检查 / 分板 / 进度',inspect:'检查孤立颗粒和细连接',board:'分板格数',exportBoards:'逐张下载分板 PNG',build:'拼豆进度模式',standalone:'✨ 已有图纸？模拟烫后效果',finishDisclaimer:'仅供视觉参考，不保证实际熨烫效果；请按材料说明安全使用。',finishType:'烫法效果',effectStrength:'效果强度',source:'原始图纸',simulated:'模拟成品',downloadFinish:'下载模拟效果 PNG',coffee:'自愿支持 LibraeSoft',free:'所有功能免费使用 · 无需账号',variant:['方案 1 · 轮廓','方案 2 · 柔和','方案 3 · 简洁'],warn:'未发现明显孤立颗粒',noImage:'请先上传图片',copied:'提示词已复制',savedSnapshot:'已保存历史快照',restoredSnapshot:'历史快照已恢复',noSnapshot:'没有可恢复的快照',single:'可能孤立的颗粒',thin:'较细的连接位置',boardDone:'分板 ZIP 已生成',buildOn:'进度模式已开启 · 点格子标记完成',buildOff:'退出进度模式',downloadUnsupported:'浏览器暂不支持此操作'},
-en:{smartHead:'✨ Smart conversion & variants',smartMode:'Conversion style',smartNote:'Offline algorithms, not cloud AI. Tiny patterns may need manual edits.',rebuild:'Regenerate three variants',aiHead:'External AI Prompt Assistant',aiHelp:'Copy the prompt and upload your image to your AI service, then import the result.',copyPrompt:'Copy optimization prompt',finish:'Finish simulator',snapshot:'Save history snapshot',restore:'Restore snapshot',theme:'Dark mode',mirror:'Mirror pen',rotate:'Rotate 90°',flip:'Flip horizontally',replace:'Replace color globally',apply:'Replace',compare:'Overlay original image (current upload)',quality:'Pattern check / boards / progress',inspect:'Check isolated beads and thin joints',board:'Board size',exportBoards:'Download board ZIP',build:'Build progress mode',standalone:'✨ Have a chart? Preview finishes',finishDisclaimer:'Visual approximation only. Real results vary; follow material safety instructions.',finishType:'Finish effect',effectStrength:'Effect intensity',source:'Original pattern',simulated:'Simulated finish',downloadFinish:'Download simulated PNG',coffee:'Support LibraeSoft (optional)',free:'All features free · No account needed',variant:['Variant 1 · Shape','Variant 2 · Smooth','Variant 3 · Simple'],warn:'No obvious isolated beads found',noImage:'Upload an image first',copied:'Prompt copied',savedSnapshot:'Snapshot saved',restoredSnapshot:'Snapshot restored',noSnapshot:'No snapshot to restore',single:'Possibly isolated beads',thin:'Thin connections',boardDone:'Board ZIP created',buildOn:'Build mode: tap cells to mark done',buildOff:'Exit build mode',downloadUnsupported:'Not supported by this browser'},
-ms:{smartHead:'✨ Penukaran pintar & pilihan',smartMode:'Gaya penukaran',smartNote:'Algoritma luar talian, bukan AI awan. Corak kecil mungkin perlu disunting.',rebuild:'Jana semula tiga pilihan',aiHead:'Pembantu Prompt AI Luaran',aiHelp:'Salin prompt serta gambar ke perkhidmatan AI anda, kemudian import hasilnya.',copyPrompt:'Salin prompt',finish:'Simulasi hasil siap',snapshot:'Simpan versi sejarah',restore:'Pulihkan versi',theme:'Mod gelap',mirror:'Pen cermin',rotate:'Putar 90°',flip:'Cerminkan melintang',replace:'Ganti warna keseluruhan',apply:'Ganti',compare:'Lapiskan gambar asal (muat naik ini)',quality:'Semak corak / papan / kemajuan',inspect:'Semak manik tunggal dan sambungan nipis',board:'Saiz papan',exportBoards:'Muat turun ZIP papan',build:'Mod kemajuan manik',standalone:'✨ Ada corak? Pratonton hasil seterika',finishDisclaimer:'Simulasi visual sahaja; hasil sebenar berbeza. Ikut arahan keselamatan bahan.',finishType:'Kesan seterika',effectStrength:'Keamatan kesan',source:'Corak asal',simulated:'Simulasi hasil',downloadFinish:'Muat turun PNG simulasi',coffee:'Sokong LibraeSoft secara sukarela',free:'Semua fungsi percuma · Tanpa akaun',variant:['Pilihan 1 · Bentuk','Pilihan 2 · Lembut','Pilihan 3 · Ringkas'],warn:'Tiada manik tunggal yang ketara',noImage:'Muat naik gambar dahulu',copied:'Prompt disalin',savedSnapshot:'Versi disimpan',restoredSnapshot:'Versi dipulihkan',noSnapshot:'Tiada versi untuk dipulihkan',single:'Manik mungkin terasing',thin:'Sambungan nipis',boardDone:'ZIP papan telah dijana',buildOn:'Mod kemajuan: ketik petak untuk siap',buildOff:'Tamat mod kemajuan',downloadUnsupported:'Pelayar tidak menyokong ciri ini'}};
+zh:{smartHead:'✨ 智能转换与候选图',smartMode:'转换风格',smartNote:'离线优化算法，非云端 AI；小图可能仍需手工修正。',rebuild:'重新生成三种方案',aiHead:'外部 AI Prompt 助手',aiHelp:'复制提示词和原图到自己的 AI 服务，优化后再上传。',copyPrompt:'复制优化 Prompt',finish:'完成品模拟',snapshot:'保存历史快照',restore:'恢复快照',theme:'深色模式',mirror:'镜像画笔',rotate:'旋转90°',flip:'水平翻转',replace:'全图替换色号',apply:'替换',compare:'叠加原图对比（本次上传）',quality:'图纸检查 / 分板 / 进度',inspect:'检查孤立颗粒和细连接',board:'分板格数',exportBoards:'逐张下载分板 PNG',build:'拼豆进度模式',standalone:'✨ 已有图纸？模拟烫后效果',finishDisclaimer:'仅供视觉参考，不保证实际熨烫效果；请按材料说明安全使用。',finishType:'烫法效果',effectStrength:'效果强度',source:'原始图纸',simulated:'模拟成品',downloadFinish:'下载模拟效果 PNG',coffee:'自愿支持 LibraeSoft',free:'所有功能免费使用 · 无需账号',variant:['方案 1 · 轮廓','方案 2 · 细节','方案 3 · 简洁'],warn:'未发现明显孤立颗粒',noImage:'请先上传图片',copied:'提示词已复制',savedSnapshot:'已保存历史快照',restoredSnapshot:'历史快照已恢复',noSnapshot:'没有可恢复的快照',single:'可能孤立的颗粒',thin:'较细的连接位置',boardDone:'分板 ZIP 已生成',buildOn:'进度模式已开启 · 点格子标记完成',buildOff:'退出进度模式',downloadUnsupported:'浏览器暂不支持此操作'},
+en:{smartHead:'✨ Smart conversion & variants',smartMode:'Conversion style',smartNote:'Offline algorithms, not cloud AI. Tiny patterns may need manual edits.',rebuild:'Regenerate three variants',aiHead:'External AI Prompt Assistant',aiHelp:'Copy the prompt and upload your image to your AI service, then import the result.',copyPrompt:'Copy optimization prompt',finish:'Finish simulator',snapshot:'Save history snapshot',restore:'Restore snapshot',theme:'Dark mode',mirror:'Mirror pen',rotate:'Rotate 90°',flip:'Flip horizontally',replace:'Replace color globally',apply:'Replace',compare:'Overlay original image (current upload)',quality:'Pattern check / boards / progress',inspect:'Check isolated beads and thin joints',board:'Board size',exportBoards:'Download board ZIP',build:'Build progress mode',standalone:'✨ Have a chart? Preview finishes',finishDisclaimer:'Visual approximation only. Real results vary; follow material safety instructions.',finishType:'Finish effect',effectStrength:'Effect intensity',source:'Original pattern',simulated:'Simulated finish',downloadFinish:'Download simulated PNG',coffee:'Support LibraeSoft (optional)',free:'All features free · No account needed',variant:['Variant 1 · Shape','Variant 2 · Details','Variant 3 · Simple'],warn:'No obvious isolated beads found',noImage:'Upload an image first',copied:'Prompt copied',savedSnapshot:'Snapshot saved',restoredSnapshot:'Snapshot restored',noSnapshot:'No snapshot to restore',single:'Possibly isolated beads',thin:'Thin connections',boardDone:'Board ZIP created',buildOn:'Build mode: tap cells to mark done',buildOff:'Exit build mode',downloadUnsupported:'Not supported by this browser'},
+ms:{smartHead:'✨ Penukaran pintar & pilihan',smartMode:'Gaya penukaran',smartNote:'Algoritma luar talian, bukan AI awan. Corak kecil mungkin perlu disunting.',rebuild:'Jana semula tiga pilihan',aiHead:'Pembantu Prompt AI Luaran',aiHelp:'Salin prompt serta gambar ke perkhidmatan AI anda, kemudian import hasilnya.',copyPrompt:'Salin prompt',finish:'Simulasi hasil siap',snapshot:'Simpan versi sejarah',restore:'Pulihkan versi',theme:'Mod gelap',mirror:'Pen cermin',rotate:'Putar 90°',flip:'Cerminkan melintang',replace:'Ganti warna keseluruhan',apply:'Ganti',compare:'Lapiskan gambar asal (muat naik ini)',quality:'Semak corak / papan / kemajuan',inspect:'Semak manik tunggal dan sambungan nipis',board:'Saiz papan',exportBoards:'Muat turun ZIP papan',build:'Mod kemajuan manik',standalone:'✨ Ada corak? Pratonton hasil seterika',finishDisclaimer:'Simulasi visual sahaja; hasil sebenar berbeza. Ikut arahan keselamatan bahan.',finishType:'Kesan seterika',effectStrength:'Keamatan kesan',source:'Corak asal',simulated:'Simulasi hasil',downloadFinish:'Muat turun PNG simulasi',coffee:'Sokong LibraeSoft secara sukarela',free:'Semua fungsi percuma · Tanpa akaun',variant:['Pilihan 1 · Bentuk','Pilihan 2 · Perincian','Pilihan 3 · Ringkas'],warn:'Tiada manik tunggal yang ketara',noImage:'Muat naik gambar dahulu',copied:'Prompt disalin',savedSnapshot:'Versi disimpan',restoredSnapshot:'Versi dipulihkan',noSnapshot:'Tiada versi untuk dipulihkan',single:'Manik mungkin terasing',thin:'Sambungan nipis',boardDone:'ZIP papan telah dijana',buildOn:'Mod kemajuan: ketik petak untuk siap',buildOff:'Tamat mod kemajuan',downloadUnsupported:'Pelayar tidak menyokong ciri ini'}};
 const v22=k=>V22[currentLang]?.[k]||V22.zh[k]||k;
 function v22Language(){for(const el of document.querySelectorAll('[data-v22]'))el.textContent=v22(el.dataset.v22);document.querySelectorAll('#candidateStrip .candidateLabel').forEach((el,i)=>el.textContent=v22('variant')[i]);if($('buildMode'))$('buildMode').textContent=buildEnabled?v22('buildOff'):v22('build');}
 $('language').addEventListener('change',()=>setTimeout(v22Language,0));
-function makeCandidates(source){
- const basePixels=[...source];
- const smoothed=basePixels.map((code,i)=>{if(code===null)return null;const x=i%w,y=Math.floor(i/w),near=[];for(const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]){const xx=x+dx,yy=y+dy;if(xx>=0&&xx<w&&yy>=0&&yy<h)near.push(basePixels[yy*w+xx]);}const freq=new Map();for(const c of near)if(c!==null)freq.set(c,(freq.get(c)||0)+1);const top=[...freq].sort((a,b)=>b[1]-a[1])[0];return top&&top[1]>=3?top[0]:code});
- const simplified=basePixels.map((code,i)=>{if(code===null)return null;const x=i%w,y=Math.floor(i/w),near=[];for(const [dx,dy] of [[0,0],[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,-1],[-1,1],[1,1]]){const xx=x+dx,yy=y+dy;if(xx>=0&&xx<w&&yy>=0&&yy<h)near.push(basePixels[yy*w+xx]);}const freq=new Map();for(const c of near)if(c!==null)freq.set(c,(freq.get(c)||0)+1);const top=[...freq].sort((a,b)=>b[1]-a[1])[0];return top&&top[1]>=5?top[0]:code});
- return [basePixels,smoothed,simplified];
+function variantDescription(index){
+ const labels={zh:['轮廓优先','细节优先','简洁色块'],en:['Shape','Details','Simple'],ms:['Bentuk','Perincian','Ringkas']};
+ return (labels[currentLang]||labels.zh)[index];
 }
-function renderCandidates(){const strip=$('candidateStrip');strip.replaceChildren();if(!variants)return;variants.forEach((v,i)=>{const button=document.createElement('button');button.className='candidate'+(selectedVariant===i?' chosen':'');const tile=document.createElement('canvas');const s=Math.max(1,Math.floor(128/Math.max(w,h)));tile.width=w*s;tile.height=h*s;const c=tile.getContext('2d');v.forEach((code,k)=>{if(byCode.get(code)){c.fillStyle=byCode.get(code).hex;c.fillRect((k%w)*s,Math.floor(k/w)*s,s,s)}});const label=document.createElement('span');label.className='candidateLabel';label.textContent=v22('variant')[i];button.append(tile,label);button.onclick=()=>{if(i===selectedVariant)return;variants[selectedVariant]=[...cells];switchingVariant=true;checkpoint();selectedVariant=i;cells=[...variants[i]];switchingVariant=false;refresh();renderCandidates()};strip.append(button)})}
+function renderCandidates(){
+ const strip=$('candidateStrip');strip.replaceChildren();if(!variants)return;
+ const first=variants[0];
+ variants.forEach((v,i)=>{
+  const button=document.createElement('button');button.type='button';button.className='candidate'+(selectedVariant===i?' chosen':'');
+  const tile=document.createElement('canvas'),px=Math.max(1,Math.floor(128/Math.max(w,h)));
+  tile.width=w*px;tile.height=h*px;const c=tile.getContext('2d');
+  v.forEach((code,k)=>{const color=byCode.get(code);if(color){c.fillStyle=color.hex;c.fillRect((k%w)*px,Math.floor(k/w)*px,px,px)}});
+  const label=document.createElement('span');label.className='candidateLabel';
+  const used=new Set(v.filter(Boolean)).size,beads=v.filter(Boolean).length;
+  const changed=v.reduce((sum,code,k)=>sum+(code!==first[k]?1:0),0),percent=Math.round(changed/v.length*100);
+  label.textContent=`${i+1} · ${variantDescription(i)} · ${used} ${currentLang==='en'?'colors':currentLang==='ms'?'warna':'色'} · ${beads} ${currentLang==='en'?'beads':currentLang==='ms'?'manik':'颗'}`;
+  const details=document.createElement('span');details.className='candidateDifference';
+  details.textContent=i===0?(currentLang==='zh'?'默认':currentLang==='ms'?'Lalai':'Default'):(percent<3?(currentLang==='zh'?'与方案1相近':currentLang==='ms'?'Hampir sama':'Similar to 1'):`${percent}% ${currentLang==='zh'?'格不同':currentLang==='ms'?'petak berbeza':'cells differ'}`);
+  button.title=label.textContent+' · '+details.textContent;
+  button.append(tile,label,details);
+  button.onclick=()=>{if(i===selectedVariant)return;variants[selectedVariant]=[...cells];switchingVariant=true;checkpoint();selectedVariant=i;cells=[...variants[i]];switchingVariant=false;refresh();renderCandidates()};
+  strip.append(button);
+ });
+}
 $('generateCandidates').onclick=()=>{if(!lastImage){toast(v22('noImage'));return}generate(lastImage)};
 $('copyPrompt').onclick=async()=>{const style=$('smartMode').value;const prompt=`Edit the attached reference image for conversion to a ${w}x${h} fuse bead pattern. Preserve the recognizable shape, outline and essential features. Simplify to at most ${$('maxColors').value} clean flat colors, no gradients, shadows, textures, dithering, text or grid lines. ${style==='simple'?'Prioritize large uninterrupted regions.':style==='faithful'?'Preserve original colors and shapes as faithfully as possible.':'Prioritize silhouette and high-contrast details.'} Center the subject and use a transparent background. Do not add elements. Return an image, not a bead chart; MARD Bead Studio will assign exact bead colors and counts.`;try{await navigator.clipboard.writeText(prompt);toast(v22('copied'))}catch(e){window.prompt('Copy prompt:',prompt)}};
 let snapshots=[];try{snapshots=JSON.parse(localStorage.getItem('mard-v22-snapshots')||'[]')}catch(e){}

@@ -68,3 +68,14 @@ JavaScript syntax and file packaging have been checked. Browser automation was b
 - 保留已有绘图工具、工程与 GitHub Pages 静态部署结构。
 - 本补丁基于 v2.2.1 HOTFIX；更新前请备份 JSON 工程。
 - 已验证 JavaScript 语法、DOM ID 引用、ZIP 结构。真实手机浏览器点击测试仍需部署后验收。
+
+
+## v2.2.4 — distinct image conversion strategies
+
+- Source sampled at 4x pixel resolution, then quantized to the selected bead brand.
+- Three **independent** candidate generation pipelines: silhouette / details / simplified blocks.
+- Style selection changes sampling, color budget and region cleanup, not just its label.
+- Each variant maintains its own editable matrix, with color/bead counts and actual difference percent.
+- Results may still be similar on already-simple art; no arbitrary damage is introduced solely to force difference.
+- Fix transparent comparison/crosshair overlays in light/dark themes.
+- Fully browser-local and compatible with GitHub Pages; no API key or backend.
