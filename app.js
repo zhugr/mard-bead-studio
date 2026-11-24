@@ -1,3 +1,4 @@
+import { initBYOK } from './ai-byok.js';
 import {PALETTE} from './palette.js';
 const $=id=>document.getElementById(id);let palette=PALETTE, byCode=new Map(palette.map(c=>[c.code,c])); let brand='mard',customPalettes={};
 let generatedBaseline=null;
@@ -453,3 +454,10 @@ updateCoordLanguage();requestCoordinateDraw();
 
 function syncThemeToggle(){const btn=$('themeToggle');btn.setAttribute('aria-pressed',String(document.body.classList.contains('darkV22')))}
 $('themeToggle').addEventListener('click',syncThemeToggle);syncThemeToggle();
+
+// Optional user-owned AI connection. Never send images without an explicit click.
+initBYOK({
+ getOriginal:()=>lastImage,
+ getSettings:()=>({w,h,max:Number($('maxColors').value),style:$('smartMode').value}),
+ importImage:async image=>{currentProjectId=null;await generate(image);$('generateCandidates').disabled=false;}
+});
